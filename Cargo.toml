@@ -1,6 +1,6 @@
 [package]
 name = "match-template"
-version = "0.0.1"
+version = "1.0.0"
 edition = "2018"
 description = "match-template is a procedural macro that generates repeated match arms by pattern."
 license = "Apache-2.0"
