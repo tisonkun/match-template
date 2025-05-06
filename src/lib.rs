@@ -12,6 +12,57 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! This crate provides a macro that can be used to append a match expression
+//! with multiple arms, where the tokens in the first arm, as a template, can be
+//! substituted and the template arm will be expanded into multiple arms.
+//!
+//! For example, the following code
+//!
+//! ```ignore
+//! match_template! {
+//!     T = [Int, Real, Double],
+//!     match Foo {
+//!         EvalType::T => { panic!("{}", EvalType::T); },
+//!         EvalType::Other => unreachable!(),
+//!     }
+//! }
+//! ```
+//!
+//! generates
+//!
+//! ```ignore
+//! match Foo {
+//!     EvalType::Int => { panic!("{}", EvalType::Int); },
+//!     EvalType::Real => { panic!("{}", EvalType::Real); },
+//!     EvalType::Double => { panic!("{}", EvalType::Double); },
+//!     EvalType::Other => unreachable!(),
+//! }
+//! ```
+//!
+//! In addition, substitution can vary on two sides of the arms.
+//!
+//! For example,
+//!
+//! ```ignore
+//! match_template! {
+//!     T = [Foo, Bar => Baz],
+//!     match Foo {
+//!         EvalType::T => { panic!("{}", EvalType::T); },
+//!     }
+//! }
+//! ```
+//!
+//! generates
+//!
+//! ```ignore
+//! match Foo {
+//!     EvalType::Foo => { panic!("{}", EvalType::Foo); },
+//!     EvalType::Bar => { panic!("{}", EvalType::Baz); },
+//! }
+//! ```
+//!
+//! Wildcard match arm is also supported (but there will be no substitution).
+
 #[macro_use]
 extern crate quote;
 
@@ -23,61 +74,15 @@ use syn::{
     *,
 };
 
-/// This crate provides a macro that can be used to append a match expression
-/// with multiple arms, where the tokens in the first arm, as a template, can be
-/// subsitituted and the template arm will be expanded into multiple arms.
+/// A procedural macro that generates repeated match arms by pattern.
 ///
-/// For example, the following code
-///
-/// ```ignore
-/// match_template! {
-///     T = [Int, Real, Double],
-///     match Foo {
-///         EvalType::T => { panic!("{}", EvalType::T); },
-///         EvalType::Other => unreachable!(),
-///     }
-/// }
-/// ```
-///
-/// generates
-///
-/// ```ignore
-/// match Foo {
-///     EvalType::Int => { panic!("{}", EvalType::Int); },
-///     EvalType::Real => { panic!("{}", EvalType::Real); },
-///     EvalType::Double => { panic!("{}", EvalType::Double); },
-///     EvalType::Other => unreachable!(),
-/// }
-/// ```
-///
-/// In addition, substitution can vary on two sides of the arms.
-///
-/// For example,
-///
-/// ```ignore
-/// match_template! {
-///     T = [Foo, Bar => Baz],
-///     match Foo {
-///         EvalType::T => { panic!("{}", EvalType::T); },
-///     }
-/// }
-/// ```
-///
-/// generates
-///
-/// ```ignore
-/// match Foo {
-///     EvalType::Foo => { panic!("{}", EvalType::Foo); },
-///     EvalType::Bar => { panic!("{}", EvalType::Baz); },
-/// }
-/// ```
-///
-/// Wildcard match arm is also supported (but there will be no substitution).
+/// See the [module-level documentation](self) for more details.
 #[proc_macro]
 pub fn match_template(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let mt = parse_macro_input!(input as MatchTemplate);
     mt.expand().into()
 }
+
 struct MatchTemplate {
     template_ident: Ident,
     substitutes: Punctuated<Substitution, Token![,]>,
