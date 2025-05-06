@@ -6,7 +6,7 @@ description = "match-template is a procedural macro that generates repeated matc
 license = "Apache-2.0"
 repository = "https://github.com/tisonkun/match-template"
 keywords = ["macro", "pattern-match"]
-categories = ["macro", "procedural-macro"]
+categories = ["development-tools"]
 
 [lib]
 proc-macro = true
