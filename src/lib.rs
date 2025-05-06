@@ -195,7 +195,7 @@ fn replace_in_token_stream<T: ToTokens + Parse>(
         })
         .collect();
 
-    syn::parse2(tokens).unwrap()
+    parse2(tokens).unwrap()
 }
 
 #[cfg(test)]
@@ -222,7 +222,7 @@ mod tests {
         "#;
         let expect_output_stream: TokenStream = expect_output.parse().unwrap();
 
-        let mt: MatchTemplate = syn::parse_str(input).unwrap();
+        let mt: MatchTemplate = parse_str(input).unwrap();
         let output = mt.expand();
         assert_eq!(output.to_string(), expect_output_stream.to_string());
     }
@@ -246,7 +246,7 @@ mod tests {
         "#;
         let expect_output_stream: TokenStream = expect_output.parse().unwrap();
 
-        let mt: MatchTemplate = syn::parse_str(input).unwrap();
+        let mt: MatchTemplate = parse_str(input).unwrap();
         let output = mt.expand();
         assert_eq!(output.to_string(), expect_output_stream.to_string());
     }
@@ -271,7 +271,7 @@ mod tests {
         "#;
         let expect_output_stream: TokenStream = expect_output.parse().unwrap();
 
-        let mt: MatchTemplate = syn::parse_str(input).unwrap();
+        let mt: MatchTemplate = parse_str(input).unwrap();
         let output = mt.expand();
         assert_eq!(output.to_string(), expect_output_stream.to_string());
     }
