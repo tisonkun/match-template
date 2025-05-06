@@ -63,15 +63,14 @@
 //!
 //! Wildcard match arm is also supported (but there will be no substitution).
 
-#[macro_use]
-extern crate quote;
-
-use proc_macro2::{Group, TokenStream, TokenTree};
-use quote::ToTokens;
+use proc_macro2::{Group, Ident, TokenStream, TokenTree};
+use quote::{quote, ToTokens};
 use syn::{
-    parse::{Parse, ParseStream, Result},
+    bracketed,
+    parse::{Parse, ParseStream},
+    parse_macro_input,
     punctuated::Punctuated,
-    *,
+    Arm, Expr, ExprMatch, Token,
 };
 
 /// A procedural macro that generates repeated match arms by pattern.
@@ -92,7 +91,7 @@ struct MatchTemplate {
 }
 
 impl Parse for MatchTemplate {
-    fn parse(input: ParseStream<'_>) -> Result<Self> {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
         let template_ident = input.parse()?;
         input.parse::<Token![=]>()?;
         let substitutes_tokens;
@@ -156,7 +155,7 @@ enum Substitution {
 }
 
 impl Parse for Substitution {
-    fn parse(input: ParseStream<'_>) -> Result<Self> {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
         let left_ident = input.parse()?;
         let fat_arrow: Option<Token![=>]> = input.parse()?;
         if fat_arrow.is_some() {
@@ -195,7 +194,7 @@ fn replace_in_token_stream<T: ToTokens + Parse>(
         })
         .collect();
 
-    parse2(tokens).unwrap()
+    syn::parse2(tokens).unwrap()
 }
 
 #[cfg(test)]
@@ -222,7 +221,7 @@ mod tests {
         "#;
         let expect_output_stream: TokenStream = expect_output.parse().unwrap();
 
-        let mt: MatchTemplate = parse_str(input).unwrap();
+        let mt: MatchTemplate = syn::parse_str(input).unwrap();
         let output = mt.expand();
         assert_eq!(output.to_string(), expect_output_stream.to_string());
     }
@@ -246,7 +245,7 @@ mod tests {
         "#;
         let expect_output_stream: TokenStream = expect_output.parse().unwrap();
 
-        let mt: MatchTemplate = parse_str(input).unwrap();
+        let mt: MatchTemplate = syn::parse_str(input).unwrap();
         let output = mt.expand();
         assert_eq!(output.to_string(), expect_output_stream.to_string());
     }
@@ -271,7 +270,7 @@ mod tests {
         "#;
         let expect_output_stream: TokenStream = expect_output.parse().unwrap();
 
-        let mt: MatchTemplate = parse_str(input).unwrap();
+        let mt: MatchTemplate = syn::parse_str(input).unwrap();
         let output = mt.expand();
         assert_eq!(output.to_string(), expect_output_stream.to_string());
     }
