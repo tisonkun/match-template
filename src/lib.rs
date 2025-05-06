@@ -63,15 +63,14 @@
 //!
 //! Wildcard match arm is also supported (but there will be no substitution).
 
-#[macro_use]
-extern crate quote;
-
-use proc_macro2::{Group, TokenStream, TokenTree};
-use quote::ToTokens;
+use proc_macro2::{Group, Ident, TokenStream, TokenTree};
+use quote::{quote, ToTokens};
 use syn::{
-    parse::{Parse, ParseStream, Result},
+    bracketed,
+    parse::{Parse, ParseStream},
+    parse_macro_input,
     punctuated::Punctuated,
-    *,
+    Arm, Expr, ExprMatch, Pat, Token,
 };
 
 /// A procedural macro that generates repeated match arms by pattern.
@@ -92,7 +91,7 @@ struct MatchTemplate {
 }
 
 impl Parse for MatchTemplate {
-    fn parse(input: ParseStream<'_>) -> Result<Self> {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
         let template_ident = input.parse()?;
         input.parse::<Token![=]>()?;
         let substitutes_tokens;
@@ -136,8 +135,14 @@ impl MatchTemplate {
                     (left_ident.into_token_stream(), right_tokens)
                 }
             };
-            arm.pat = replace_in_token_stream(arm.pat, &template_ident, &left_tokens);
-            arm.body = replace_in_token_stream(arm.body, &template_ident, &right_tokens);
+            arm.pat = replace_in_token_stream(
+                arm.pat,
+                Pat::parse_multi_with_leading_vert,
+                &template_ident,
+                &left_tokens,
+            );
+            arm.body =
+                replace_in_token_stream(arm.body, Parse::parse, &template_ident, &right_tokens);
             arm
         });
         quote! {
@@ -156,7 +161,7 @@ enum Substitution {
 }
 
 impl Parse for Substitution {
-    fn parse(input: ParseStream<'_>) -> Result<Self> {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
         let left_ident = input.parse()?;
         let fat_arrow: Option<Token![=>]> = input.parse()?;
         if fat_arrow.is_some() {
@@ -174,8 +179,9 @@ impl Parse for Substitution {
     }
 }
 
-fn replace_in_token_stream<T: ToTokens + Parse>(
+fn replace_in_token_stream<T: ToTokens, P: Fn(ParseStream) -> syn::Result<T>>(
     input: T,
+    parse: P,
     from_ident: &Ident,
     to_tokens: &TokenStream,
 ) -> T {
@@ -188,14 +194,14 @@ fn replace_in_token_stream<T: ToTokens + Parse>(
             TokenTree::Ident(ident) if ident == *from_ident => to_tokens.clone(),
             TokenTree::Group(group) => Group::new(
                 group.delimiter(),
-                replace_in_token_stream(group.stream(), from_ident, to_tokens),
+                replace_in_token_stream(group.stream(), Parse::parse, from_ident, to_tokens),
             )
             .into_token_stream(),
             other => other.into(),
         })
         .collect();
 
-    syn::parse2(tokens).unwrap()
+    syn::parse::Parser::parse2(parse, tokens).unwrap()
 }
 
 #[cfg(test)]
