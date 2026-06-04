@@ -88,19 +88,27 @@
 //!
 //! Wildcard match arm is also supported (but there will be no substitution).
 
-use proc_macro2::{Group, Ident, TokenStream, TokenTree};
-use quote::{quote, ToTokens};
-use syn::{
-    bracketed, parenthesized,
-    parse::{Parse, ParseStream},
-    parse_macro_input,
-    punctuated::Punctuated,
-    Arm, Expr, ExprMatch, Pat, Token,
-};
+use proc_macro2::Group;
+use proc_macro2::Ident;
+use proc_macro2::TokenStream;
+use proc_macro2::TokenTree;
+use quote::quote;
+use quote::ToTokens;
+use syn::bracketed;
+use syn::parenthesized;
+use syn::parse::Parse;
+use syn::parse::ParseStream;
+use syn::parse_macro_input;
+use syn::punctuated::Punctuated;
+use syn::Arm;
+use syn::Expr;
+use syn::ExprMatch;
+use syn::Pat;
+use syn::Token;
 
 /// A procedural macro that generates repeated match arms by pattern.
 ///
-/// See the [module-level documentation](self) for more details.
+/// See the [crate documentation](self) for more details.
 #[proc_macro]
 pub fn match_template(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let mt = parse_macro_input!(input as MatchTemplate);

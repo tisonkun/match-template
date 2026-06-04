@@ -1,9 +1,5 @@
-imports_granularity = "Crate"
-group_imports = "StdExternalCrate"
-reorder_imports = true
-reorder_impl_items = true
-condense_wildcard_suffixes = true
-wrap_comments = true
-normalize_comments = true
-normalize_doc_attributes = true
+comment_width = 120
 format_code_in_doc_comments = true
+group_imports = "StdExternalCrate"
+imports_granularity = "Item"
+wrap_comments = true
