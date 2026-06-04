@@ -62,6 +62,31 @@ match Foo {
 }
 ```
 
+To reference both sides of a mapped substitution, use a pair of template
+identifiers.
+
+For example, the following code
+
+```rust
+match_template! {
+    (VN, VT) = [Databases => DatabasesView, Schemas => SchemasView],
+    match table_name {
+        VT::TABLE_NAME => Some(SystemView::VN(VT)),
+        _ => None,
+    }
+}
+```
+
+generates
+
+```rust
+match table_name {
+    DatabasesView::TABLE_NAME => Some(SystemView::Databases(DatabasesView)),
+    SchemasView::TABLE_NAME => Some(SystemView::Schemas(SchemasView)),
+    _ => None,
+}
+```
+
 Wildcard match arm is also supported (but there will be no substitution).
 
 ## License and Origins

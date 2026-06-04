@@ -61,12 +61,37 @@
 //! }
 //! ```
 //!
+//! To reference both sides of a mapped substitution, use a pair of template
+//! identifiers.
+//!
+//! For example,
+//!
+//! ```ignore
+//! match_template! {
+//!     (VN, VT) = [Databases => DatabasesView, Schemas => SchemasView],
+//!     match table_name {
+//!         VT::TABLE_NAME => Some(SystemView::VN(VT)),
+//!         _ => None,
+//!     }
+//! }
+//! ```
+//!
+//! generates
+//!
+//! ```ignore
+//! match table_name {
+//!     DatabasesView::TABLE_NAME => Some(SystemView::Databases(DatabasesView)),
+//!     SchemasView::TABLE_NAME => Some(SystemView::Schemas(SchemasView)),
+//!     _ => None,
+//! }
+//! ```
+//!
 //! Wildcard match arm is also supported (but there will be no substitution).
 
 use proc_macro2::{Group, Ident, TokenStream, TokenTree};
 use quote::{quote, ToTokens};
 use syn::{
-    bracketed,
+    bracketed, parenthesized,
     parse::{Parse, ParseStream},
     parse_macro_input,
     punctuated::Punctuated,
@@ -83,7 +108,7 @@ pub fn match_template(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 }
 
 struct MatchTemplate {
-    template_ident: Ident,
+    template: Template,
     substitutes: Punctuated<Substitution, Token![,]>,
     match_exp: Box<Expr>,
     template_arm: Arm,
@@ -92,7 +117,7 @@ struct MatchTemplate {
 
 impl Parse for MatchTemplate {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
-        let template_ident = input.parse()?;
+        let template = input.parse()?;
         input.parse::<Token![=]>()?;
         let substitutes_tokens;
         bracketed!(substitutes_tokens in input);
@@ -107,7 +132,7 @@ impl Parse for MatchTemplate {
         assert!(template_arm.guard.is_none(), "Expect no match arm guard");
 
         Ok(Self {
-            template_ident,
+            template,
             substitutes,
             match_exp: m.expr,
             template_arm,
@@ -119,7 +144,7 @@ impl Parse for MatchTemplate {
 impl MatchTemplate {
     fn expand(self) -> TokenStream {
         let Self {
-            template_ident,
+            template,
             substitutes,
             match_exp,
             template_arm,
@@ -135,14 +160,34 @@ impl MatchTemplate {
                     (left_ident.into_token_stream(), right_tokens)
                 }
             };
-            arm.pat = replace_in_token_stream(
-                arm.pat,
-                Pat::parse_multi_with_leading_vert,
-                &template_ident,
-                &left_tokens,
-            );
-            arm.body =
-                replace_in_token_stream(arm.body, Parse::parse, &template_ident, &right_tokens);
+            match &template {
+                Template::Single(template_ident) => {
+                    arm.pat = replace_in_token_stream(
+                        arm.pat,
+                        Pat::parse_multi_with_leading_vert,
+                        template_ident,
+                        &left_tokens,
+                    );
+                    arm.body = replace_in_token_stream(
+                        arm.body,
+                        Parse::parse,
+                        template_ident,
+                        &right_tokens,
+                    );
+                }
+                Template::Pair {
+                    left_ident,
+                    right_ident,
+                } => {
+                    let replacements = [(left_ident, &left_tokens), (right_ident, &right_tokens)];
+                    arm.pat = replace_all_in_token_stream(
+                        arm.pat,
+                        Pat::parse_multi_with_leading_vert,
+                        &replacements,
+                    );
+                    arm.body = replace_all_in_token_stream(arm.body, Parse::parse, &replacements);
+                }
+            }
             arm
         });
         quote! {
@@ -150,6 +195,36 @@ impl MatchTemplate {
                 #(#match_arms,)*
                 #(#remaining_arms,)*
             }
+        }
+    }
+}
+
+#[derive(Debug)]
+enum Template {
+    Single(Ident),
+    Pair {
+        left_ident: Ident,
+        right_ident: Ident,
+    },
+}
+
+impl Parse for Template {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
+        if input.peek(syn::token::Paren) {
+            let template_tokens;
+            parenthesized!(template_tokens in input);
+            let left_ident = template_tokens.parse()?;
+            template_tokens.parse::<Token![,]>()?;
+            let right_ident = template_tokens.parse()?;
+            if !template_tokens.is_empty() {
+                return Err(template_tokens.error("expected exactly two template identifiers"));
+            }
+            Ok(Template::Pair {
+                left_ident,
+                right_ident,
+            })
+        } else {
+            Ok(Template::Single(input.parse()?))
         }
     }
 }
@@ -185,23 +260,46 @@ fn replace_in_token_stream<T: ToTokens, P: Fn(ParseStream) -> syn::Result<T>>(
     from_ident: &Ident,
     to_tokens: &TokenStream,
 ) -> T {
+    replace_all_in_token_stream(input, parse, &[(from_ident, to_tokens)])
+}
+
+fn replace_all_in_token_stream<T: ToTokens, P: Fn(ParseStream) -> syn::Result<T>>(
+    input: T,
+    parse: P,
+    replacements: &[(&Ident, &TokenStream)],
+) -> T {
     let mut tokens = TokenStream::new();
     input.to_tokens(&mut tokens);
 
-    let tokens: TokenStream = tokens
+    let tokens = replace_tokens(tokens, replacements);
+    syn::parse::Parser::parse2(parse, tokens).unwrap()
+}
+
+fn replace_tokens(tokens: TokenStream, replacements: &[(&Ident, &TokenStream)]) -> TokenStream {
+    tokens
         .into_iter()
         .flat_map(|token| match token {
-            TokenTree::Ident(ident) if ident == *from_ident => to_tokens.clone(),
-            TokenTree::Group(group) => Group::new(
-                group.delimiter(),
-                replace_in_token_stream(group.stream(), Parse::parse, from_ident, to_tokens),
-            )
-            .into_token_stream(),
+            TokenTree::Ident(ident) => replacements
+                .iter()
+                .find_map(|(from_ident, to_tokens)| {
+                    if ident == **from_ident {
+                        Some((*to_tokens).clone())
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or_else(|| ident.into_token_stream()),
+            TokenTree::Group(group) => {
+                let mut new_group = Group::new(
+                    group.delimiter(),
+                    replace_tokens(group.stream(), replacements),
+                );
+                new_group.set_span(group.span());
+                new_group.into_token_stream()
+            }
             other => other.into(),
         })
-        .collect();
-
-    syn::parse::Parser::parse2(parse, tokens).unwrap()
+        .collect()
 }
 
 #[cfg(test)]
@@ -273,6 +371,52 @@ mod tests {
                 VectorValue::Bar => EvalType::Baz,
                 VectorValue::Bark => EvalType:: < & 'static Whooh>(),
                 EvalType::Other => unreachable!(),
+            }
+        "#;
+        let expect_output_stream: TokenStream = expect_output.parse().unwrap();
+
+        let mt: MatchTemplate = syn::parse_str(input).unwrap();
+        let output = mt.expand();
+        assert_eq!(output.to_string(), expect_output_stream.to_string());
+    }
+
+    #[test]
+    fn test_pair_map() {
+        let input = r#"
+            (VN, VT) = [Databases => DatabasesView, Schemas => SchemasView],
+            match table_name {
+                VT::TABLE_NAME => Some(SystemView::VN(VT)),
+                _ => None,
+            }
+        "#;
+
+        let expect_output = r#"
+            match table_name {
+                DatabasesView::TABLE_NAME => Some(SystemView::Databases(DatabasesView)),
+                SchemasView::TABLE_NAME => Some(SystemView::Schemas(SchemasView)),
+                _ => None,
+            }
+        "#;
+        let expect_output_stream: TokenStream = expect_output.parse().unwrap();
+
+        let mt: MatchTemplate = syn::parse_str(input).unwrap();
+        let output = mt.expand();
+        assert_eq!(output.to_string(), expect_output_stream.to_string());
+    }
+
+    #[test]
+    fn test_pair_identical() {
+        let input = r#"
+            (VN, VT) = [Foo, Bar],
+            match v {
+                VN => VT,
+            }
+        "#;
+
+        let expect_output = r#"
+            match v {
+                Foo => Foo,
+                Bar => Bar,
             }
         "#;
         let expect_output_stream: TokenStream = expect_output.parse().unwrap();
