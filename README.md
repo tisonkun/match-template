@@ -11,6 +11,11 @@
 [license-badge]: https://img.shields.io/crates/l/match-template
 [license-url]: LICENSE
 
+> [!WARNING]
+> `match-template` is deprecated and is no longer recommended for new code. Please use [`macro-template`](https://github.com/fast/macro-template) instead.
+>
+> Existing `match-template` code can keep working, but new use cases and future improvements should go to `macro-template`.
+
 ## Overview
 
 match-template is a procedural macro that generates repeated match arms by pattern.
