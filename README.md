@@ -12,9 +12,9 @@
 [license-url]: LICENSE
 
 > [!WARNING]
-> `match-template` is deprecated and is no longer recommended for new code. Please use [`macro-template`](https://github.com/fast/macro-template) instead.
+> `match-template` is deprecated and is no longer recommended for new code. Please use [`macroweave`](https://github.com/fast/macroweave) instead.
 >
-> Existing `match-template` code can keep working, but new use cases and future improvements should go to `macro-template`.
+> Existing `match-template` code can keep working, but new use cases and future improvements should go to `macroweave`.
 
 ## Overview
 
